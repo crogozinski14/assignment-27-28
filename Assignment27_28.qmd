@@ -1,0 +1,10 @@
+---
+title: "Assignment27_28"
+author: "Chloe Rogozinski"
+date: "2025-05-11"
+format: html
+execute:
+  echo: true
+---
+
+## Assignment 27 + 28
