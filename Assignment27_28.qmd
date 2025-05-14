@@ -7,4 +7,144 @@ execute:
   echo: true
 ---
 
-## Assignment 27 + 28
+# Step 1
+```{r}
+library(sf)
+library(osmdata)
+library(dplyr)
+library(terra)
+library(ggplot2)
+
+
+fc <- opq("Fort Collins, Colorado") |>
+  add_osm_feature("boundary", "administrative") |>
+  add_osm_feature("name", "Fort Collins") |>
+  osmdata_sf()
+
+fc <- fc$osm_multipolygons |> filter(name == "Fort Collins")
+
+
+foco_rivers <- opq(st_bbox(st_transform(fc, 4326))) |>
+  add_osm_feature("waterway") |>
+  osmdata_sf()
+```
+
+# Step 2
+```{r}
+poudre_river <- foco_rivers$osm_lines |> 
+  filter(grepl("Cache la Poudre", name, ignore.case = TRUE))
+
+poudre_merged <- st_union(poudre_river)
+poudre_river_sf <- st_sf(geometry = poudre_merged)
+
+```
+
+
+# Step 3
+```{r}
+river_length <- st_length(poudre_river_sf)
+river_length
+
+
+```
+
+# Step 4
+```{r}
+poudre_pts <- st_cast(poudre_river_sf, "POINT")
+```
+
+# Step 5
+```{r}
+
+dem <- rast("https://raw.githubusercontent.com/mikejohnson51/csu-ess-330/refs/heads/main/resources/foco-elev-cm.tif")
+
+```
+
+# Step 6
+
+```{r}
+
+st_crs(poudre_pts) <- 4326
+poudre_pts_proj <- st_transform(poudre_pts, crs(dem))
+
+
+poudre_pts_vect <- vect(poudre_pts_proj)
+elevation_values <- extract(dem, poudre_pts_vect)
+
+```
+
+# Step 7
+```{r}
+poudre_pts_elev <- bind_cols(poudre_pts_proj, elevation = elevation_values[, 2])
+
+```
+
+# Step 8
+```{r}
+poudre_pts_elev <- poudre_pts_elev |> mutate(ID = 1:n())
+
+```
+
+# Step 9
+```{r}
+start_pt <- poudre_pts_elev[1, ]
+end_pt <- poudre_pts_elev[nrow(poudre_pts_elev), ]
+straight_distance <- st_distance(start_pt, end_pt)
+straight_distance
+
+```
+
+# Step 10
+```{r}
+
+inlet <- head(st_cast(poudre_river_sf, "POINT"), 1)
+outlet <- tail(st_cast(poudre_river_sf, "POINT"), 1)
+pts <- bind_rows(inlet, outlet)
+line <- st_cast(st_union(pts), "LINESTRING")
+
+
+sin <- st_length(poudre_river_sf) / st_length(line)
+sin
+
+```
+
+# Step 11
+```{r}
+
+elev_inlet <- poudre_pts_elev$elevation[1]      
+elev_outlet <- poudre_pts_elev$elevation[nrow(poudre_pts_elev)]  
+
+
+elev_change_m <- (elev_inlet - elev_outlet) / 100  
+
+
+slope <- elev_change_m / as.numeric(st_length(poudre_river_sf))
+slope
+
+```
+
+
+# Step 12
+```{r}
+library(zoo)
+
+profile <- extract(dem, poudre_river_sf)$dem
+
+
+plot(profile, type = "l", col = "gray", main = "River Elevation Profile",
+     ylab = "Elevation (cm)", xlab = "Index", yaxt = "n")
+
+
+y_ticks <- seq(floor(min(profile, na.rm = TRUE)/100)*100, ceiling(max(profile, na.rm = TRUE)/100)*100, by = 200)
+axis(2, at = y_ticks, las = 2)  
+
+
+lines(rollmean(profile, k = 10, na.pad = TRUE), col = "darkred", lwd = 3)
+```
+
+
+
+
+
+
+
